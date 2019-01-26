@@ -52,6 +52,7 @@ Resources:
       Family: 'jmeter-master'
       Cpu: !Ref 'ContainerCpu'
       Memory: !Ref 'ContainerMemory'
+      NetworkMode: 'host'
       ContainerDefinitions:
         - Name: 'jmeter-master'
           Cpu: !Ref 'ContainerCpu'
@@ -72,6 +73,7 @@ Resources:
       Family: 'jmeter-slave'
       Cpu: !Ref 'ContainerCpu'
       Memory: !Ref 'ContainerMemory'
+      NetworkMode: 'host'
       ContainerDefinitions:
         - Name: 'jmeter-slave'
           Cpu: !Ref 'ContainerCpu'
