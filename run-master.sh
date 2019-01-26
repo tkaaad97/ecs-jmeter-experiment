@@ -40,7 +40,7 @@ do
 done
 
 logfile_name=result.jtl
-jmeter_options=(-n -t "senarios/${SCENARIO_FILE_NAME}" -l "$logfile_name" '-Jserver.rmi.ssl.disable=true' )
+jmeter_options=(-n -t "scenarios/${SCENARIO_FILE_NAME}" -l "$logfile_name" '-Jserver.rmi.ssl.disable=true' )
 
 for prop in "${jmeter_properties[@]}"; do
     jmeter_options+=( -J"$prop" )
