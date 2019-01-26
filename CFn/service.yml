@@ -43,7 +43,7 @@ Mappings:
   JmeterConfig:
     ServerPort:
       ContainerPort: '1099'
-      HostPort: '0'
+      HostPort: '1099'
 
 Resources:
   MasterTaskDefinition:
