@@ -19,6 +19,7 @@ ENV PATH $JMETER_HOME/bin:$PATH
 
 WORKDIR /work
 
+ADD senarios /work/senarios
 ADD run-slave.sh /usr/local/bin
 ADD run-master.sh /usr/local/bin
 
