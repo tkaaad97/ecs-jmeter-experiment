@@ -1,0 +1,218 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: vpc
+Parameters:
+  LoadTargetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+Mappings:
+  SubnetConfig:
+    VPC:
+      CIDR: 10.10.0.0/16
+    PublicOne:
+      CIDR: 10.10.0.0/24
+    PublicTwo:
+      CIDR: 10.10.1.0/24
+    PrivateOne:
+      CIDR: 10.10.2.0/24
+    PrivateTwo:
+      CIDR: 10.10.3.0/24
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: !FindInMap
+        - SubnetConfig
+        - VPC
+        - CIDR
+  PublicSubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          Ref: AWS::Region
+      VpcId: !Ref 'VPC'
+      CidrBlock: !FindInMap
+        - SubnetConfig
+        - PublicOne
+        - CIDR
+      MapPublicIpOnLaunch: true
+  PublicSubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs
+          Ref: AWS::Region
+      VpcId: !Ref 'VPC'
+      CidrBlock: !FindInMap
+        - SubnetConfig
+        - PublicTwo
+        - CIDR
+      MapPublicIpOnLaunch: true
+  PrivateSubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          Ref: AWS::Region
+      VpcId: !Ref 'VPC'
+      CidrBlock: !FindInMap
+        - SubnetConfig
+        - PrivateOne
+        - CIDR
+  PrivateSubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs
+          Ref: AWS::Region
+      VpcId: !Ref 'VPC'
+      CidrBlock: !FindInMap
+        - SubnetConfig
+        - PrivateTwo
+        - CIDR
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachement:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref 'VPC'
+      InternetGatewayId: !Ref 'InternetGateway'
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachement
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTable'
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'InternetGateway'
+  PublicSubnetOneRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'PublicSubnetOne'
+      RouteTableId: !Ref 'PublicRouteTable'
+  PublicSubnetTwoRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'PublicSubnetTwo'
+      RouteTableId: !Ref 'PublicRouteTable'
+  NatGatewayOneAttachment:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachement
+    Properties:
+      Domain: vpc
+  NatGatewayTwoAttachment:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachement
+    Properties:
+      Domain: vpc
+  NatGatewayOne:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt 'NatGatewayOneAttachment.AllocationId'
+      SubnetId: !Ref 'PublicSubnetOne'
+  NatGatewayTwo:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt 'NatGatewayTwoAttachment.AllocationId'
+      SubnetId: !Ref 'PublicSubnetTwo'
+  PrivateRouteTableOne:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+  PrivateRouteOne:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref 'PrivateRouteTableOne'
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref 'NatGatewayOne'
+  PrivateRouteTableOneAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'PrivateRouteTableOne'
+      SubnetId: !Ref 'PrivateSubnetOne'
+  PrivateRouteTableTwo:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+  PrivateRouteTwo:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref 'PrivateRouteTableTwo'
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref 'NatGatewayTwo'
+  PrivateRouteTableTwoAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'PrivateRouteTableTwo'
+      SubnetId: !Ref 'PrivateSubnetTwo'
+  EcsHostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the ECS hosts that run containers
+      VpcId: !Ref 'VPC'
+  EcsSecurityGroupIngressFromSelf:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from other containers in the same security group
+      GroupId: !Ref 'EcsHostSecurityGroup'
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref 'EcsHostSecurityGroup'
+  LoadTargetSecurityGroupIngressFromNatOne:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from NAT
+      GroupId: !Ref 'LoadTargetSecurityGroup'
+      IpProtocol: '-1'
+      CidrIp: !Join
+        - /
+        - - !Ref 'NatGatewayOneAttachment'
+          - '0'
+  LoadTargetSecurityGroupIngressFromNatTwo:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from NAT
+      GroupId: !Ref 'LoadTargetSecurityGroup'
+      IpProtocol: '-1'
+      CidrIp: !Join
+        - /
+        - - !Ref 'NatGatewayTwoAttachment'
+          - '0'
+Outputs:
+  VpcId:
+    Description: The ID of the VPC that this stack is deployed in
+    Value: !Ref 'VPC'
+    Export:
+      Name: !Sub '${AWS::StackName}:VpcId'
+  PublicSubnetOne:
+    Description: Public subnet one
+    Value: !Ref 'PublicSubnetOne'
+    Export:
+      Name: !Sub '${AWS::StackName}:PublicSubnetOne'
+  PublicSubnetTwo:
+    Description: Public subnet two
+    Value: !Ref 'PublicSubnetTwo'
+    Export:
+      Name: !Sub '${AWS::StackName}:PublicSubnetTwo'
+  PrivateSubnetOne:
+    Description: Private subnet one
+    Value: !Ref 'PrivateSubnetOne'
+    Export:
+      Name: !Sub '${AWS::StackName}:PrivateSubnetOne'
+  PrivateSubnetTwo:
+    Description: Private subnet two
+    Value: !Ref 'PrivateSubnetTwo'
+    Export:
+      Name: !Sub '${AWS::StackName}:PrivateSubnetTwo'
+  EcsHostSecurityGroup:
+    Description: A security group used to allow containers to receive traffic
+    Value: !Ref 'EcsHostSecurityGroup'
+    Export:
+      Name: !Sub '${AWS::StackName}:EcsHostSecurityGroup'

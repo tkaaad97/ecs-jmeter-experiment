@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ecs service and task definitions
+Parameters:
+  VpcStackName:
+    Type: String
+
+  ClusterStackName:
+    Type: String
+
+  SlaveServiceName:
+    Type: String
+    Default: jmeter-slave
+    Description: A name for the slave service
+
+  RepositoryName:
+    Type: String
+    Default: jmeter
+
+  ContainerCpu:
+    Type: Number
+    Default: 1024
+    Description: How much CPU to give the container. 1024 is 1 CPU
+
+  ContainerMemory:
+    Type: Number
+    Default: 1024
+    Description: How much memory in megabytes to give the container
+
+  SlaveTaskCount:
+    Type: Number
+    Default: 0
+    Description: How many copies of the service task to run
+
+  ServicePrivateNamespace:
+    Type: String
+    Default: jmeter-load.local
+
+  LogGroup:
+    Type: String
+    Default: stresstest-load-ecs
+
+Mappings:
+  JmeterConfig:
+    ServerPort:
+      ContainerPort: '1099'
+      HostPort: '0'
+
+Resources:
+  MasterTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: 'jmeter-master'
+      Cpu: !Ref 'ContainerCpu'
+      Memory: !Ref 'ContainerMemory'
+      ContainerDefinitions:
+        - Name: 'jmeter-master'
+          Cpu: !Ref 'ContainerCpu'
+          Memory: !Ref 'ContainerMemory'
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-group: !Ref 'LogGroup'
+              awslogs-stream-prefix: !Ref 'AWS::StackName'
+          Command:
+            - run-master.sh
+
+  SlaveTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: 'jmeter-slave'
+      Cpu: !Ref 'ContainerCpu'
+      Memory: !Ref 'ContainerMemory'
+      ContainerDefinitions:
+        - Name: 'jmeter-slave'
+          Cpu: !Ref 'ContainerCpu'
+          Memory: !Ref 'ContainerMemory'
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}'
+          PortMappings:
+            - ContainerPort: !FindInMap ['JmeterConfig', 'ServerPort', 'ContainerPort']
+              HostPort: !FindInMap ['JmeterConfig', 'ServerPort', 'HostPort']
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-group: !Ref 'LogGroup'
+              awslogs-stream-prefix: !Ref 'AWS::StackName'
+          Command:
+            - start-slave.sh
+
+  SlaveService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster:
+        Fn::ImportValue: !Sub '${ClusterStackName}:ClusterName'
+      ServiceName: !Ref 'SlaveServiceName'
+      DesiredCount: !Ref 'SlaveTaskCount'
+      TaskDefinition: !Ref 'SlaveTaskDefinition'
+      ServiceRegistries:
+        - ContainerName: 'jmeter-slave'
+          ContainerPort: !FindInMap ['JmeterConfig', 'ServerPort', 'ContainerPort']
+          RegistryArn: !GetAtt 'JmeterServiceDiscovery.Arn'
+
+  JmeterServicePrivateNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Vpc:
+        Fn::ImportValue: !Sub '${VpcStackName}:VpcId'
+      Name: !Ref 'ServicePrivateNamespace'
+
+  JmeterServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      DnsConfig:
+        DnsRecords:
+          - Type: SRV
+            TTL: '10'
+        NamespaceId: !GetAtt 'JmeterServicePrivateNamespace.Id'
+      HealthCheckCustomConfig:
+        FailureThreshold: 1.0
+      Name: jmeter

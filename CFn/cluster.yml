@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  VpcStackName:
+    Type: String
+  DesiredCapacity:
+    Type: Number
+    Default: '2'
+    Description: Number of EC2 instances to launch in your ECS cluster.
+  MaxSize:
+    Type: Number
+    Default: '6'
+    Description: Maximum number of EC2 instances that can be launched in your ECS cluster.
+  ImageId:
+    Description: AMI ID
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: c5.large
+
+Resources:
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: [!Ref 'EC2Role']
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ec2.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              - 'ecs:CreateCluster'
+              - 'ecs:DeregisterContainerInstance'
+              - 'ecs:DiscoverPollEndpoint'
+              - 'ecs:Poll'
+              - 'ecs:RegisterContainerInstance'
+              - 'ecs:StartTelemetrySession'
+              - 'ecs:Submit*'
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              - 'ecr:GetAuthorizationToken'
+              - 'ecr:BatchGetImage'
+              - 'ecr:GetDownloadUrlForLayer'
+            Resource: '*'
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub '${VpcStackName}:PrivateSubnetOne'
+        - Fn::ImportValue: !Sub '${VpcStackName}:PrivateSubnetTwo'
+      LaunchConfigurationName: !Ref 'LaunchConfiguration'
+      MinSize: '1'
+      MaxSize: !Ref 'MaxSize'
+      DesiredCapacity: !Ref 'DesiredCapacity'
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: true
+
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref 'ImageId'
+      SecurityGroups:
+        - Fn::ImportValue: !Sub '${VpcStackName}:EcsHostSecurityGroup'
+      InstanceType: !Ref 'InstanceType'
+      IamInstanceProfile: !Ref 'EC2InstanceProfile'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
+
+Outputs:
+  ClusterName:
+    Description: The name of the ECS cluster
+    Value: !Ref 'ECSCluster'
+    Export:
+      Name: !Sub '${AWS::StackName}:ClusterName'
