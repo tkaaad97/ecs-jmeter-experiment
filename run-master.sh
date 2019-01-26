@@ -37,8 +37,11 @@ do
 done
 
 logfile_name=result.jtl
-jmeter_options=(-n -t "senarios/${SCENARIO_FILE_NAME}" -l "$logfile_name")
-jmeter_options+=( $(printf -- '-J \"%s\" ' "${jmeter_properties[@]}") )
+jmeter_options=(-n -t "senarios/${SCENARIO_FILE_NAME}" -l "$logfile_name" '-Jserver.rmi.ssl.disable=true' )
+
+for prop in "${jmeter_properties[@]}"; do
+    jmeter_options+=( -J"$prop" )
+done
 
 if [ -n "$REMOTE_HOSTS" ]; then
     jmeter_options+=( -R "$REMOTE_HOSTS" )
