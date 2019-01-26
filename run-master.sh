@@ -9,7 +9,6 @@ usage_exit() {
 
 global_properties=()
 jmeter_properties=()
-AWS_REGION=${AWS_REGION:-ap-northeast-1}
 SCENARIO_FILE_NAME=${SCENARIO_STARTPOINT_FILE_NAME:-example.jmx}
 REMOTE_HOSTS=''
 
