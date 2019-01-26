@@ -1,4 +1,4 @@
-FROM openjdk:10-jre-slim
+FROM openjdk:11-jre-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -9,9 +9,9 @@ RUN apt-get update \
 
 RUN mkdir /jmeter \
     && cd /jmeter \
-    && wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-4.0.tgz \
-    && tar --strip-components=1 -xvf apache-jmeter-4.0.tgz \
-    && rm apache-jmeter-4.0.tgz
+    && wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.0.tgz \
+    && tar --strip-components=1 -xvf apache-jmeter-5.0.tgz \
+    && rm apache-jmeter-5.0.tgz
 
 ENV JMETER_HOME /jmeter
 
@@ -20,8 +20,8 @@ ENV PATH $JMETER_HOME/bin:$PATH
 WORKDIR /work
 
 ADD senarios /work/senarios
-ADD run-slave.sh /usr/local/bin
+ADD start-slave.sh /usr/local/bin
 ADD run-master.sh /usr/local/bin
 
 ENTRYPOINT []
-CMD ["run-slave.sh"]
+CMD ["start-slave.sh"]
