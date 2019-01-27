@@ -167,24 +167,22 @@ Resources:
       SourceSecurityGroupId: !Ref 'EcsHostSecurityGroup'
   LoadTargetSecurityGroupIngressFromNatOne:
     Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: 'NatGatewayOneAttachment'
     Properties:
       Description: Ingress from NAT
       GroupId: !Ref 'LoadTargetSecurityGroup'
       IpProtocol: '-1'
-      CidrIp: !Join
-        - /
-        - - !Ref 'NatGatewayOneAttachment'
-          - '0'
+      CidrIp: !Sub '${NatGatewayOneAttachment}/32'
+
   LoadTargetSecurityGroupIngressFromNatTwo:
     Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: 'NatGatewayTwoAttachment'
     Properties:
       Description: Ingress from NAT
       GroupId: !Ref 'LoadTargetSecurityGroup'
       IpProtocol: '-1'
-      CidrIp: !Join
-        - /
-        - - !Ref 'NatGatewayTwoAttachment'
-          - '0'
+      CidrIp: !Sub '${NatGatewayTwoAttachment}/32'
+
 Outputs:
   VpcId:
     Description: The ID of the VPC that this stack is deployed in
